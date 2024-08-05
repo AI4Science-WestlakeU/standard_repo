@@ -29,18 +29,23 @@ conda create -n ENV_NAME python=3.x.x
 Install dependencies:
 ```code
 pip install -r requirements.txt
+pip install -e .
 ```
 
 #  file structure
 - project_module
-  - data                    # data class and dataloader used in the project
   - dataset                 # datasets ready for training or analysis
-  - config                  # configuration files for training and inference
-  - inference               # scripts for model inference
-  - model                   # model definitions
+  - docs                   # documentation files
+  - src
+    - data                    # data class and dataloader used in the project
+    - config                  # configuration files for training and inference
+    - inference               # scripts for model inference
+    - model                   # model definitions
+    - train                   # Scripts and configuration files for training models
+    - utils                   # Utility scripts and helper functions
+    - tests                   # unit tests for the project
   - results                 # results and logs from training and inference
-  - train                   # Scripts and configuration files for training models
-  - utils                   # Utility scripts and helper functions
+  - scripts                   # bash scripts for running training and inference
   - .gitignore              # Specifies intentionally untracked files to ignore by git
   - filepath.py             # Python script for file path handling
   - README.md               # Markdown file with information about the project for users

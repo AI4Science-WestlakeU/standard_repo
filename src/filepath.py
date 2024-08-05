@@ -3,7 +3,10 @@ import pdb
 sys.path.append(os.path.join(os.path.dirname("__file__"), '..'))
 sys.path.append(os.path.join(os.path.dirname("__file__"), '..', '..'))
 pos='snap'
-CURRENT_WP=os.getcwd()
+path = os.getcwd()
+SRC_PATH = path.split('src')[0]+"/src"
+CURRENT_WP=os.path.dirname(SRC_PATH)
+PARENT_WP=os.path.dirname(CURRENT_WP)
 if pos=='snap':
     EXP_PATH = CURRENT_WP
 else:

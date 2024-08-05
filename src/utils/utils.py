@@ -7,7 +7,7 @@ import os
 import sys
 from termcolor import colored
 import pdb
-
+import matplotlib.pyplot as plt
 COLOR_LIST = ["b", "r", "g", "y", "c", "m", "skyblue", "indigo", "goldenrod", "salmon", "pink",
                   "silver", "darkgreen", "lightcoral", "navy", "orchid", "steelblue", "saddlebrown", 
                   "orange", "olive", "tan", "firebrick", "maroon", "darkslategray", "crimson", "dodgerblue", "aquamarine",
@@ -106,9 +106,8 @@ def add_args_from_config(parser):
     return parser
 def save_config_from_args(args):
     config_dict = {k: v for k, v in vars(args).items() if k != 'config'}
-    time_now = datetime.now().strftime('%Y%m%d_%H%M%S')
     
-    config_dir = args.exp_path+'/results/'+time_now
+    config_dir = args.results_path
     os.makedirs(config_dir, exist_ok=True)  # Ensure the directory exists
     config_file_path = os.path.join(config_dir, 'config.yaml')
     with open(config_file_path, 'w') as file:
@@ -158,3 +157,36 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     return
+
+def draw_loss(training_loss_list, test_loss_list, save_path):
+    """
+    Plot the training and testing loss curves and save the plot to a file.
+    
+    Args:
+    training_loss_list (list): List of training losses.
+    test_loss_list (list): List of testing losses.
+    save_path (str): Path where the plot will be saved.
+    
+    Returns:
+    None
+    """
+    # Create a figure and axis object using plt.subplots
+    fig, ax = plt.subplots()
+
+    # Plot training and testing loss
+    ax.plot(training_loss_list, label='Training Loss')
+    ax.plot(test_loss_list, label='Testing Loss')
+
+    # Set title and labels
+    ax.set_title('Training and Testing Loss During Training')
+    ax.set_xlabel('Epochs')
+    ax.set_ylabel('Loss')
+
+    # Display legend
+    ax.legend()
+
+    # Save the plot to the specified file
+    plt.savefig(save_path)
+
+    # Show the plot
+    plt.show()

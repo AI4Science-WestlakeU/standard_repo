@@ -38,11 +38,14 @@ pip install -e .
   - docs                   # documentation files
   - src
     - data                    # data class and dataloader used in the project
+      - data_demo.py         # A demo code for data class
     - config                  # configuration files for training and inference
     - inference               # scripts for model inference
     - model                   # model definitions
     - train                   # Scripts and configuration files for training models
+      - train_demo.py         # A demo code for training
     - utils                   # Utility scripts and helper functions
+      - utils.py              # A demo code for utility functions
     - tests                   # unit tests for the project
   - results                 # results and logs from training and inference
   - scripts                   # bash scripts for running training and inference

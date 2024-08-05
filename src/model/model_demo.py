@@ -2,20 +2,54 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
-        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(320, 50)
-        self.fc2 = nn.Linear(50, 10)
+from einops import rearrange, repeat
+class Net_demo(nn.Module):
+    '''
+        simulation model
+            input: u_0 (B,1,T,d) 
+            output: u_[1:T] (B,1,T,d)
+    '''
+    def __init__(self, h=256,input_channel=80,channels=[128,256,256],output_channel=80):
+        super(Net_demo, self).__init__()
+        if h%4==0:
+        	self.h = h // 4
+        else:
+        	self.h = 30
+        self.channels= channels
+        self.down = nn.Sequential(
+            nn.Conv1d(input_channel, channels[0], 5, padding=2),
+            nn.ELU(),
+            nn.Conv1d(channels[0],channels[1], 5, stride=2, padding=2), 
+            nn.ELU(),
+            nn.Conv1d(channels[1], channels[2], 5, stride=2, padding=2), 
+            nn.ELU(),
+        )
+        self.enc=nn.Linear(256*32,256*128)####
 
-    def forward(self, x):
-        x = F.relu(F.max_pool2d(self.conv1(x), 2))
-        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-        x = x.view(-1, 320)
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, training=self.training)
-        x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+        self.up = nn.Sequential(
+            nn.Conv1d(channels[2], channels[1], 5, padding=2),
+            nn.ELU(),
+            nn.Conv1d(channels[1],channels[0], 5, padding=2),
+            nn.ELU(),
+            nn.Conv1d(channels[0], output_channel, 5, padding=2),
+            nn.ELU(),
+        )
+        self.dec=nn.Linear(1,2)####
+        
+    def forward(self, u):
+        '''
+        u: (B, 1,T, d)
+        u_next: (B,1, T, d)
+        '''
+        bs,_,c,d=u.shape
+        u = u.squeeze()
+        u_latent = self.down(u) # [B,256,32]
+
+        u_latent= rearrange(u_latent,"b c d -> b (c d)")
+        u_latent = self.enc(u_latent)
+        u_latent= rearrange(u_latent,"b (c d) -> b c d",c=self.channels[-1]) # [B,256,128]
+
+        u_next = self.up(u_latent)
+        u_next = u_next.view(bs,1,c,d)
+
+        return u_next

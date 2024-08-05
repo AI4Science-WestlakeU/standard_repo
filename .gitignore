@@ -1,3 +1,5 @@
 results/
-data/
+dataset/
+docs/
 wandb/
+src.egg-info/

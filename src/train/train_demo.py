@@ -1,151 +1,246 @@
-#general imports
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torchvision
-from torchvision import datasets, transforms
-import torch.nn.functional as F
-import numpy as np
-import pdb
+#!/usr/bin/env python
+# coding: utf-8
+
+# # Import package
+
+# In[ ]:
+
+
+try:
+    get_ipython().run_line_magic('load_ext', 'autoreload')
+    get_ipython().run_line_magic('autoreload', '2')
+except:
+    pass
+# general package
+
+import matplotlib.pyplot as plt
 import os
 import sys
-import time
 import argparse
-import wandb
 import tqdm
+from einops import rearrange, repeat
+import logging
+import datetime  
+import time
+import yaml
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import datasets 
+import numpy as np
+#custom package
+from src.data.data_demo import Advection
+from src.model.model_demo import Net_demo
+from src.utils.utils import set_seed,draw_loss,add_args_from_config,save_config_from_args
+# path
+from src.filepath import EXP_PATH,SRC_PATH,PARENT_WP
 
-#import path
-sys.path.append(os.path.join(os.path.dirname("__file__"), '..'))
-sys.path.append(os.path.join(os.path.dirname("__file__"), '..', '..'))
 
-#custom imports
-import project_module.utils.utils as utils
-from project_module.filepath import EXP_PATH,CURRENT_WP
-from project_module.model.model_demo import Net
-class Trainner(object):
-    def __init__(self,args,model,train_dataloader,test_dataloader):
-        self.args=args
-        self.device = torch.device(f"cuda:{args.gpu_id}" if torch.cuda.is_available() else "cpu")
-        self.model = model
-        self.optimizer = self.get_optimizer()
-        self.loss_fn = self.get_loss_fn()
-        self.train_dataloader=train_dataloader
-        self.test_dataloader=test_dataloader
+# # Augument
 
-    def get_optimizer(self):
-        optimizer = None
-        return optimizer
-    def get_scheduler(self):
-        scheduler = None
-        return scheduler
+# In[ ]:
 
-    def get_loss_fn(self):
-        loss_fn = None
-        return loss_fn
-    def train(self):
-        args=self.args
-        optimizer = optim.SGD(self.model.parameters(), lr=args.lr, momentum=args.momentum)
-        wandb.watch(self.model)
-        
-        global_step = 0
-        for epoch in tqdm.trange(1, args.epochs + 1):
-            # training
-            self.model.train()
-            for batch_idx, (data, target) in enumerate(train_dataloader):
-                data, target = data.to(device), target.to(device)
-                optimizer.zero_grad()
-                output = model(data)
-                loss = F.nll_loss(output, target)
-                loss.backward()
-                optimizer.step()
-                global_step +=1
-                if batch_idx % args.log_interval == 0:
-                    print('Train Epoch: {} [{}/{} ({:.0%})]\tLoss: {:.6f}'.format(epoch, batch_idx * len(data), len(train_dataloader.dataset),batch_idx / len(train_dataloader), loss.item()))
-                    training_log = {
-                        "train/loss": loss.detach().item(),
-                    }
-                # wandb 可视化训练损失（此处仅展示保存训练曲线）
-                wandb.log(training_log, step=global_step)
-            self.model.eval()
-            test_loss = 0
-            correct = 0
 
-            example_images = []
-            with torch.no_grad():
-                for data, target in test_dataloader:
-                    data, target = data.to(device), target.to(device)
-                    output = model(data)
-                    # sum up batch loss
-                    test_loss += F.nll_loss(output, target, reduction='sum').item()
-                    # get the index of the max log-probability
-                    pred = output.max(1, keepdim=True)[1]
-                    correct += pred.eq(target.view_as(pred)).sum().item()
-                    example_images.append(wandb.Image(
-                        data[0], caption="Pred: {} Truth: {}".format(pred[0].item(), target[0])))
+parser = argparse.ArgumentParser(description="Training Configurations of autoencoder fot theory")
+parser.add_argument("--date_exp", type=str, default="2021-09-30", help="Date of the experiment")
+parser.add_argument("--exp_name", type=str, default="AE_overfit", help="Name of the experiment")
+parser.add_argument("--dataset_path", type=str, default="data", help="Path to the data")
+parser.add_argument("--results_path", type=str, default="results", help="Path to the results")
+parser.add_argument('--config', type=str, default='/project_module/configs/config.yaml')
 
-            test_loss /= len(test_dataloader.dataset)
-            print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0%})\n'.format(
-                test_loss, correct, len(test_dataloader.dataset),
-                correct / len(test_dataloader.dataset)))
-            
-            test_log = {
-                "Test/Examples": example_images, # 保存测试图像
-                "Test/Accuracy": 100. * correct / len(test_dataloader.dataset), 
-                "Test/Loss": test_loss}
-            # 保存test可视化内容
-            wandb.log(test_log, step=global_step)
-            if epoch%self.args.save_interval==0:
-                pdb.set_trace()
-                if not os.path.exists(self.args.results_path):
-                    os.makedirs(self.args.results_path)
-                model_path = os.path.join(self.args.results_path,f'model_{epoch}.pth')
-                # torch.save(model_path, self.model.state_dict())
-                torch.save(self.model.state_dict(), model_path)
-        wandb.finish()
-    
-    def validate(self):
-        pass
-    
-    def test(self):
-        pass
 
-if __name__=='__main__':
-    # config the args
-    parser = argparse.ArgumentParser(description='Train a model')
-    parser.add_argument('--config', type=str, default='/zhangtao/general/project_module/configs/config.yaml')
-    parser = utils.add_args_from_config(parser)
+# training configurations
+parser.add_argument("--epochs", type=int, default=100, help="Number of epochs")
+parser.add_argument("--save_every", type=int, default=20, help="Save the model every x epochs")
+parser.add_argument("--train_batch_size", type=int, default=256, help="Batch size")
+parser.add_argument("--test_batch_size", type=int, default=256, help="test Batch size")
+parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
+parser.add_argument("--checkpoint_path", type=str, default=None, help="Path load the checkpoint to restore, if not None, contine training")
+parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for the dataloader")ßßß
+
+parser.add_argument("--gpu_id", type=int, default=0, help="ID of the GPU")
+parser.add_argument("--seed", type=int, default=0, help="Seed for the random number generator")
+
+# model configurations
+
+
+current_path = os.getcwd()
+try:
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    args = parser.parse_args([])
+
+    args.date_exp="2024-08-05"
+    args.exp_name="taining_demo_test"
+    args.config = "standard_repo/src/configs/config.yaml"
+
+    args.dataset_path ="standard_repo/dataset/advection"
+    # training configurations
+    args.epochs = 10
+    args.save_every = 1
+    args.train_batch_size = 512
+    args.test_batch_size = 512
+    args.lr = 0.001
+    args.checkpoint_path = None
+    args.num_workers = 0
+
+    # configure environment
+    args.gpu_id = 0
+    args.seed = 42
+
+
+except:
+    # parser = add_args_from_config(parser)
     args=parser.parse_args()
-    args.exp_path=EXP_PATH
-    args.date_time = time.strftime('%Y%m%d_%H%M%S')
-    args.results_path = os.path.join(args.exp_path,'results',args.date_time,args.exp_name,'train')
-    utils.save_config_from_args(args)
+    if args.config!=None:
+        with open(args.config, 'r') as file:
+            config_data = yaml.safe_load(file)
+
+        # 更新 args
+        for key, value in config_data.items():
+            setattr(args, key, value)
+    is_jupyter = False
+
+# prepare t path
+args.results_path=EXP_PATH+"/results/"+args.date_exp+"/"+args.exp_name+"/"
+args.dataset_path = os.path.join(PARENT_WP,args.dataset_path)
+args.config = os.path.join(PARENT_WP,args.config)
+
+if args.checkpoint_path != None:
+    args.checkpoint_path = os.path.join(PARENT_WP,args.checkpoint_path)
+if not os.path.exists(args.results_path):
+    os.makedirs(args.results_path)
+save_config_from_args(args)
+# set up logging
+current_time = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+log_filename = os.path.join(args.results_path, "training_{}.log".format(current_time))
+logging.basicConfig(filename=log_filename, level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s')
+logging.info('args: {}'.format(args))
+# set device and seed
+device = torch.device("cuda:"+str(args.gpu_id) if torch.cuda.is_available() else "cpu")
+set_seed(args.seed)
+
+
+
+# # Basic func
+
+# In[ ]:
+
+
+def cycle(dl):
+    while True:
+        for data in dl:
+            yield data
+def extract(a, t, x_shape):
+    b, *_ = t.shape
+    out = a.gather(-1, t)
+    return out.reshape(b, *((1,) * (len(x_shape) - 1)))
+
+
+# # Load data and initialize model, model optimizer, loss function
+
+# In[ ]:
+
+
+# load dataset
+train_dataset = Advection(
+        dataset_name="Advection",
+        dataset_path=args.dataset_path,
+        mode = 'train',
+
+        input_steps=1,
+        output_steps=80,
+        time_interval=1,
+        simutime_steps=80,
+        rescaler=4,
+    )
+test_dataset = Advection(
+        dataset_name="Advection",
+        dataset_path=args.dataset_path,
+        mode = 'test',
+        input_steps=1,
+        output_steps=80,
+        time_interval=1,
+        simutime_steps=80,
+        rescaler=4,
+    )
+train_dataloader = torch.utils.data.DataLoader(train_dataset,batch_size= args.train_batch_size, shuffle=True, pin_memory=True,num_workers=args.num_workers)
+test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False, pin_memory=True,num_workers=args.num_workers)
+logging.info(f"data loaded from{args.dataset_path}")
+
+# configure model
+model = Net_demo().to(device)
+if args.checkpoint_path is not None:
+    model.load_state_dict(torch.load(args.checkpoint_path))
+    logging.info(f"Checkpoint{args.checkpoint_path} loaded")
+
+# configue optimizer and loss function
+optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.5)
+criterion = nn.MSELoss()
+
+
+# # Training model
+
+# In[ ]:
+
+
+logging.info("Start training on ",torch.cuda.get_device_name())
+num_params = sum(p.numel() for p in model.parameters())
+logging.info("Number of parameters: {}".format(num_params))
+logging.info("number of batch in train_loader: ", len(train_dataloader))
+print("number of batch in test_loader: ", len(test_dataloader))
+start_time = time.time()
+training_loss_list = []
+test_loss_list = []
+best_epoch = 0
+
+# training loop
+for epoch in tqdm.tqdm(range(1,args.epochs+1)):
+    model.train()
+    total_loss = 0.
+    best_test_loss = 1e9
+    for batch_idx, data in enumerate(train_dataloader):
+        input,target = data
+        input = input.to(device)
+        target = target.to(device)
+
+        optimizer.zero_grad()
+        output = model(input) # [B,1,T,s] => [B,1,T,s]
+        loss = criterion(output, target)
+
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.sum().item()
+        # input = input.cpu()
+        # target = target.cpu()
+        torch.cuda.empty_cache()
+    scheduler.step()
     
-    device = torch.device(f"cuda:{args.gpu_id}" if torch.cuda.is_available() else "cpu")
-    # config model
-    model=Net().to(device)
-    
-    # config dataloader 
-    kwargs = {'num_workers': 1, 'pin_memory': True}
-    train_dataloader = torch.utils.data.DataLoader(
-        datasets.MNIST('./data', train=True, download=True,
-                       transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
-        batch_size=args.train_batch_size, shuffle=True, **kwargs)
-    test_dataloader = torch.utils.data.DataLoader(
-        datasets.MNIST('./data', train=False, transform=transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,))
-        ])),
-        batch_size=args.test_batch_size, shuffle=True, **kwargs)
-    
-    # config wandb
-    if args.use_wandb:
-        os.environ["WANDB_API_KEY"] = "88b926fd6325fdc9ab9afc2292d8fe2d2664951a"
-        wandb.login()
-        wandb.init(project=args.wandb_project, config=args)
-    utils.set_seed(args.seed)
-    # config trainner 
-    trainner=Trainner(args,model,train_dataloader,test_dataloader)
-    trainner.train()
+    average_loss = total_loss/len(train_dataloader)
+    training_loss_list.append(average_loss)
+    logging.info("training epoch {}, average loss: {}".format(epoch, average_loss))
+    if epoch % args.save_every == 0:
+        model.eval()
+        with torch.no_grad():
+            for test_data in test_dataloader:
+                break
+            input,target = test_data
+            input = input.to(device)
+            target = target.to(device)
+            output = model(input) # [B,1,T,s] => [B,1,T,s]
+            loss = criterion(output, target)
+            test_loss = loss.sum().item()
+            test_loss_list.append(test_loss)
+            if test_loss< best_test_loss:
+                best_epoch = epoch
+                best_test_loss = test_loss
+            logging.info("testing epoch {}, loss: {}".format(epoch, test_loss))
+        torch.save(model.state_dict(), os.path.join(args.results_path, "model_epoch_{}.pth".format(epoch)))
+        draw_loss(training_loss_list,test_loss_list,args.results_path)
+end_time = time.time()
+logging.info(f"Training complete, best epoch is {best_epoch}, time cost is {end_time-start_time}s")
+logging.info("Results save at {}".format(args.results_path))
+
+
+# # Evaluate the model

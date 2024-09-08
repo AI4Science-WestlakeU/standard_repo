@@ -1,6 +1,6 @@
 #activate the conda environment
 source /opt/conda/bin/activate
-conda activate control
+conda activate ideEnv
 
 # Run the python script
-python test.py
+python src/train/train_demo.py --dataset_path "dataset/advection" --date_exp '2024-09-08'

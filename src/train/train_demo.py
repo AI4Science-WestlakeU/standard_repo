@@ -26,6 +26,7 @@ import yaml
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 import datasets 
 import numpy as np
 #custom package
@@ -46,7 +47,7 @@ parser.add_argument("--date_exp", type=str, default="2021-09-30", help="Date of 
 parser.add_argument("--exp_name", type=str, default="AE_overfit", help="Name of the experiment")
 parser.add_argument("--dataset_path", type=str, default="data", help="Path to the data")
 parser.add_argument("--results_path", type=str, default="results", help="Path to the results")
-parser.add_argument('--config', type=str, default='/project_module/configs/config.yaml')
+parser.add_argument('--config', type=str, default=None, help='Path to the config file')
 
 
 # training configurations
@@ -56,11 +57,11 @@ parser.add_argument("--train_batch_size", type=int, default=256, help="Batch siz
 parser.add_argument("--test_batch_size", type=int, default=256, help="test Batch size")
 parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
 parser.add_argument("--checkpoint_path", type=str, default=None, help="Path load the checkpoint to restore, if not None, contine training")
-parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for the dataloader")ßßß
+parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for the dataloader")
 
 parser.add_argument("--gpu_id", type=int, default=0, help="ID of the GPU")
 parser.add_argument("--seed", type=int, default=0, help="Seed for the random number generator")
-
+parser.add_argument("--is_use_tfb", type=bool, default=True, help="Whether to use tensorboard")
 # model configurations
 
 
@@ -69,7 +70,7 @@ try:
     get_ipython().run_line_magic('matplotlib', 'inline')
     args = parser.parse_args([])
 
-    args.date_exp="2024-08-05"
+    args.date_exp="2024-09-08"
     args.exp_name="taining_demo_test"
     args.config = "standard_repo/src/configs/config.yaml"
 
@@ -102,17 +103,20 @@ except:
 
 # prepare t path
 args.results_path=EXP_PATH+"/results/"+args.date_exp+"/"+args.exp_name+"/"
-args.dataset_path = os.path.join(PARENT_WP,args.dataset_path)
-args.config = os.path.join(PARENT_WP,args.config)
+args.dataset_path = os.path.join(EXP_PATH,args.dataset_path)
+if args.config != None:
+    args.config = os.path.join(EXP_PATH,args.config)
 
 if args.checkpoint_path != None:
-    args.checkpoint_path = os.path.join(PARENT_WP,args.checkpoint_path)
+    args.checkpoint_path = os.path.join(EXP_PATH,args.checkpoint_path)
 if not os.path.exists(args.results_path):
     os.makedirs(args.results_path)
 save_config_from_args(args)
 # set up logging
 current_time = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 log_filename = os.path.join(args.results_path, "training_{}.log".format(current_time))
+if args.is_use_tfb:
+    writer = SummaryWriter(log_dir=args.results_path, filename_suffix="training_tf{}".format(current_time))
 logging.basicConfig(filename=log_filename, level=logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(message)s')
 logging.info('args: {}'.format(args))
@@ -220,27 +224,30 @@ for epoch in tqdm.tqdm(range(1,args.epochs+1)):
     average_loss = total_loss/len(train_dataloader)
     training_loss_list.append(average_loss)
     logging.info("training epoch {}, average loss: {}".format(epoch, average_loss))
+    with torch.no_grad():
+        for test_data in test_dataloader:
+            break
+        input,target = test_data
+        input = input.to(device)
+        target = target.to(device)
+        output = model(input) # [B,1,T,s] => [B,1,T,s]
+        loss = criterion(output, target)
+        test_loss = loss.sum().item()
+        test_loss_list.append(test_loss)
+        if test_loss< best_test_loss:
+            best_epoch = epoch
+            best_test_loss = test_loss
+        logging.info("testing epoch {}, loss: {}".format(epoch, test_loss))
+    if args.is_use_tfb:
+        writer.add_scalar("Loss/train", average_loss, epoch)
+        writer.add_scalar("Loss/test", test_loss, epoch)
     if epoch % args.save_every == 0:
-        model.eval()
-        with torch.no_grad():
-            for test_data in test_dataloader:
-                break
-            input,target = test_data
-            input = input.to(device)
-            target = target.to(device)
-            output = model(input) # [B,1,T,s] => [B,1,T,s]
-            loss = criterion(output, target)
-            test_loss = loss.sum().item()
-            test_loss_list.append(test_loss)
-            if test_loss< best_test_loss:
-                best_epoch = epoch
-                best_test_loss = test_loss
-            logging.info("testing epoch {}, loss: {}".format(epoch, test_loss))
         torch.save(model.state_dict(), os.path.join(args.results_path, "model_epoch_{}.pth".format(epoch)))
         draw_loss(training_loss_list,test_loss_list,args.results_path)
 end_time = time.time()
 logging.info(f"Training complete, best epoch is {best_epoch}, time cost is {end_time-start_time}s")
 logging.info("Results save at {}".format(args.results_path))
-
+if args.is_use_tfb:
+    writer.close()
 
 # # Evaluate the model

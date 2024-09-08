@@ -2,4 +2,4 @@ results/
 dataset/
 docs/
 wandb/
-src.egg-info/
+standard_repo.egg-info/

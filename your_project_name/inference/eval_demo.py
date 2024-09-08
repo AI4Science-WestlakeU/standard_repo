@@ -30,11 +30,11 @@ import torch.nn.functional as F
 import datasets 
 import numpy as np
 #custom package, model,data,utils
-from src.data.data_demo import Advection
-from src.model.model_demo import Net_demo
-from src.utils.utils import set_seed,caculate_confidence_interval
+from standard_repo.data.data_demo import Advection
+from standard_repo.model.model_demo import Net_demo
+from standard_repo.utils.utils import set_seed,caculate_confidence_interval
 # path
-from src.filepath import EXP_PATH,SRC_PATH,PARENT_WP
+from standard_repo.filepath import EXP_PATH,SRC_PATH,PARENT_WP
 
 
 # # Set Arguments

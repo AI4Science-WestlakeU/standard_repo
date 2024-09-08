@@ -30,11 +30,11 @@ from torch.utils.tensorboard import SummaryWriter
 import datasets 
 import numpy as np
 #custom package
-from src.data.data_demo import Advection
-from src.model.model_demo import Net_demo
-from src.utils.utils import set_seed,draw_loss,add_args_from_config,save_config_from_args
+from standard_repo.data.data_demo import Advection
+from standard_repo.model.model_demo import Net_demo
+from standard_repo.utils.utils import set_seed,draw_loss,add_args_from_config,save_config_from_args
 # path
-from src.filepath import EXP_PATH,SRC_PATH,PARENT_WP
+from standard_repo.filepath import EXP_PATH,SRC_PATH,PARENT_WP
 
 
 # # Augument
@@ -72,7 +72,7 @@ try:
 
     args.date_exp="2024-09-08"
     args.exp_name="taining_demo_test"
-    args.config = "standard_repo/src/configs/config.yaml"
+    args.config = "standard_repo/standard_repo/configs/config.yaml"
 
     args.dataset_path ="standard_repo/dataset/advection"
     # training configurations

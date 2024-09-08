@@ -22,21 +22,24 @@ Framework of paper:
 
 1. Install dependencies.
 
-```code
+```
 conda create -n ENV_NAME python=3.x.x
 ```
 
 Install dependencies:
-```code
+```
 pip install -r requirements.txt
 pip install -e .
 ```
+
+Replace the directory name `standard_repo` with your project name and the corresponding 
+directory name in setup.py, .gitignore, .
 
 #  file structure
 - project_module
   - dataset                 # datasets ready for training or analysis
   - docs                   # documentation files
-  - src
+  - $project_name
     - data                    # data class and dataloader used in the project
       - data_demo.py         # A demo code for data class
     - config                  # configuration files for training and inference

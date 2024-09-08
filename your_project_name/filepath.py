@@ -4,7 +4,7 @@ sys.path.append(os.path.join(os.path.dirname("__file__"), '..'))
 sys.path.append(os.path.join(os.path.dirname("__file__"), '..', '..'))
 pos='snap'
 path = os.getcwd()
-SRC_PATH = path.split('src')[0]+"/src"
+SRC_PATH = path.split('standard_repo')[0]+"/standard_repo"
 CURRENT_WP=os.path.dirname(SRC_PATH)
 PARENT_WP=os.path.dirname(CURRENT_WP)
 if pos=='snap':

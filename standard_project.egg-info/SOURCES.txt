@@ -1,0 +1,16 @@
+README.md
+setup.py
+standard_project/__init__.py
+standard_project/filepath.py
+standard_project.egg-info/PKG-INFO
+standard_project.egg-info/SOURCES.txt
+standard_project.egg-info/dependency_links.txt
+standard_project.egg-info/top_level.txt
+standard_project/data/__init__.py
+standard_project/data/data_demo.py
+standard_project/model/__init__.py
+standard_project/model/model_demo.py
+standard_project/train/__init__.py
+standard_project/train/train_demo.py
+standard_project/utils/__init__.py
+standard_project/utils/utils.py

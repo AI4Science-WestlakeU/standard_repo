@@ -190,3 +190,80 @@ def draw_loss(training_loss_list, test_loss_list, save_path):
 
     # Show the plot
     plt.show()
+
+
+def get_entropy(X, Y=None, K=3, NN=100, normalize=False, stop_grad_reference=False):
+    '''
+    Estimating differential entropy with K-nearest neighbors.
+    From Lombardi, Damiano, and Sanjay Pant. "Nonparametric k-nearest-neighbor entropy estimator."
+        Physical Review E 93.1 (2016): 013310.
+
+    Args:
+        X, Y: torch.tensor, with shape of [N, F] or [N], where N is the number of samples,
+            and F is the feature size. If Y is not None, then compute the entropy of H(X, Y).
+        K: K^th nearest neighbor. Slightly larger K yields more stable estimates.
+        NN: number of samples to sample from to compute the entropy.
+        normalize: whether to normalize the X (and Y). Default False.
+        stop_grad_reference: if True, will stop gradient for the reference samples.
+
+    Returns:
+        entropy: scalar, estimated entropy.
+    '''
+    epsilon = 1e-20
+    MAX = 1e10
+
+    device = X.device
+    NN = min(NN, X.shape[0]) # number of points to sample from
+    K = min(K, NN)
+    indices = torch.randperm(X.shape[0])[:NN]
+    if X.ndim == 1:
+        X = X[indices, None]
+    else:
+        X = X[indices]
+    if normalize:
+        X = (X - X.mean(0)) / (X.std(0) + epsilon)
+
+    if Y is not None:
+        if Y.ndim == 1:
+            Y = Y[indices, None]
+        else:
+            Y = Y[indices]
+        if normalize:
+            Y = (Y - Y.mean(0)) / (Y.std(0) + epsilon)
+        X = torch.cat((X, Y), dim=1)
+    if stop_grad_reference:
+        dist_matrix = torch.norm(X[:, None, :] - X[None, :, :].detach(), p=2, dim=-1)  # dist_matrix: [N, N]
+    else:
+        dist_matrix = torch.norm(X[:, None, :] - X[None, :, :], p=2, dim=-1)  # dist_matrix: [N, N]
+    dist_matrix = torch.where(
+        torch.eye(dist_matrix.size(0), dtype=bool, device=device),
+        torch.tensor(MAX, dtype=dist_matrix.dtype, device=device),
+        dist_matrix
+    )  # Assign the diagonal elements to be MAX.
+    top_k_values = torch.topk(dist_matrix, K, dim=1, largest=False)[0][:, -1] # [N], obtaining the top K'th distance from each row
+    return X.shape[-1] * torch.log(top_k_values + epsilon).mean(0) + torch.digamma(torch.tensor(NN, device=device)) \
+            - torch.digamma(torch.tensor(K, device=device)) + torch.log(torch.tensor(torch.pi, device=device)) * X.shape[-1] / 2 \
+            - torch.lgamma(torch.tensor(1 + X.shape[-1] / 2, device=device))
+
+
+def get_mi(X, Y, K=3, NN=100, normalize=False, stop_grad_reference=False):
+    '''
+    Compute estimation for mutual information.
+
+    Args:
+        X, Y: torch.tensor, with shape of [N, F] or [N], where N is the number of samples,
+            and F is the feature size. If Y is not None, then compute the entropy of H(X, Y).
+        K: K^th nearest neighbor. Slightly larger K yields more stable estimates.
+        NN: number of samples to sample from to compute the entropy.
+        normalize: whether to normalize the X (and Y). Default False.
+        stop_grad_reference: if True, will stop gradient for the reference samples.
+
+    Returns:
+        mi: scalar, estimated mutual information.
+    '''
+    ent_X = entropy(X, K=K, NN=NN, normalize=normalize, stop_grad_reference=stop_grad_reference)
+    ent_Y = entropy(Y, K=K, NN=NN, normalize=normalize, stop_grad_reference=stop_grad_reference)
+    ent_XY = entropy(X, Y, K=K, NN=NN, normalize=normalize, stop_grad_reference=stop_grad_reference)
+    # print(ent_X, ent_Y, ent_XY)
+    mutual_information = ent_X + ent_Y - ent_XY
+    return mutual_information

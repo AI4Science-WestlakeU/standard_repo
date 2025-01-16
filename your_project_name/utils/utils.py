@@ -267,3 +267,12 @@ def get_mi(X, Y, K=3, NN=100, normalize=False, stop_grad_reference=False):
     # print(ent_X, ent_Y, ent_XY)
     mutual_information = ent_X + ent_Y - ent_XY
     return mutual_information
+
+
+def get_hashing(string_repr, length=None):
+    """Get the hashing of a string."""
+    import hashlib, base64
+    hashing = base64.b64encode(hashlib.md5(string_repr.encode('utf-8')).digest()).decode().replace("/", "a")[:-2]
+    if length is not None:
+        hashing = hashing[:length]
+    return hashing

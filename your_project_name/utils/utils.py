@@ -212,6 +212,8 @@ def get_entropy(X, Y=None, K=3, NN=100, normalize=False, stop_grad_reference=Fal
     epsilon = 1e-20
     MAX = 1e10
 
+    if len(X.shape) > 2:
+        raise Exception('The shape of X and Y must be [N, F] or [N]. Please fix the shape!')
     device = X.device
     NN = min(NN, X.shape[0]) # number of points to sample from
     K = min(K, NN)

@@ -3,3 +3,4 @@ dataset/
 docs/
 wandb/
 standard_repo.egg-info/
+**/__pycache__/

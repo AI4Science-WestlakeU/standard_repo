@@ -1,0 +1,179 @@
+# Standard Research Repository - Cursor AI Rules
+
+## Project Overview
+This is a standard research project template for deep learning and scientific computing projects. The codebase follows academic research best practices with modular design, configuration-driven experiments, and reproducibility focus.
+
+## Core Principles
+
+### 1. Code Quality & Safety
+- **Always follow PEP8** style guidelines with 88-character line limit
+- **Type hints required** for all function signatures and class methods
+- **Docstrings mandatory** for all classes, functions, and modules using Google style
+- **Error handling**: Use try-except blocks for file I/O, model loading, and external API calls
+- **Input validation**: Validate function arguments, especially file paths and configurations
+- **No hardcoded paths**: Use configuration files or environment variables
+- **Security**: Never commit API keys, passwords, or sensitive data
+
+### 2. Project Structure Compliance
+Follow the established directory structure:
+```
+standard_repo_module/
+├── data/          # Dataset classes and data loading
+├── model/         # Model definitions and architectures  
+├── train/         # Training scripts and configurations
+├── inference/     # Evaluation and inference scripts
+├── utils/         # Utility functions and helpers
+├── configs/       # Configuration files (YAML)
+├── tests/         # Unit tests and integration tests
+└── __init__.py    # Package initialization
+```
+
+### 3. Naming Conventions
+- **Files**: `snake_case.py` (e.g., `train_demo.py`, `model_demo.py`)
+- **Classes**: `PascalCase` (e.g., `Net_demo`, `Advection`)
+- **Functions/Variables**: `snake_case` (e.g., `load_dataset`, `train_batch_size`)
+- **Constants**: `UPPER_CASE` (e.g., `EXP_PATH`, `COLOR_LIST`)
+- **Experiments**: Use date format `YYYY-MM-DD` for experiment folders
+
+### 4. Configuration Management
+- **Use YAML configs** for all hyperparameters and settings
+- **Config inheritance**: Support base configs with overrides
+- **Argument parsing**: Use argparse with config file integration
+- **Save configurations** with each experiment run for reproducibility
+- **Environment-specific configs**: Separate dev/prod/test configurations
+
+### 5. Research-Specific Requirements
+
+#### Experiment Management
+- **Unique experiment IDs**: Combine date + experiment name
+- **Result organization**: Save to `results/YYYY-MM-DD/exp_name/`
+- **Checkpoint management**: Regular model saving with epoch numbers
+- **Logging**: Use Python logging module with file and console output
+- **Metrics tracking**: Integrate TensorBoard or WandB for visualization
+
+#### Reproducibility
+- **Seed everything**: Set seeds for Python, NumPy, PyTorch, and CUDA
+- **Version tracking**: Log package versions and git commit hashes
+- **Data versioning**: Track dataset versions and preprocessing steps
+- **Environment specs**: Maintain requirements.txt and environment.yml
+
+#### Code Documentation
+- **README.md**: Include installation, usage, and citation information
+- **Reproducibility statement**: Document how to reproduce results
+- **API documentation**: Generate docs for all public functions
+- **Experiment logs**: Detailed logging of training progress and metrics
+
+### 6. PyTorch/ML Specific Guidelines
+
+#### Model Development
+- **Device handling**: Support both CPU and GPU with proper device management
+- **Memory management**: Use `torch.cuda.empty_cache()` appropriately
+- **Model saving**: Save state_dict, not entire model objects
+- **Gradient handling**: Proper gradient accumulation and clipping
+
+#### Data Handling
+- **DataLoader optimization**: Use appropriate num_workers and pin_memory
+- **Data validation**: Check tensor shapes and data types
+- **Preprocessing**: Document and version all data transformations
+- **Memory efficiency**: Use generators for large datasets
+
+#### Training Best Practices
+- **Progress tracking**: Use tqdm for progress bars
+- **Learning rate scheduling**: Implement and log LR changes
+- **Early stopping**: Implement validation-based early stopping
+- **Gradient monitoring**: Log gradient norms and detect vanishing/exploding gradients
+
+### 7. AI Assistant Guidelines
+
+#### When Writing Code
+- **Start with imports**: Organize imports (standard, third-party, local)
+- **Add comprehensive docstrings**: Include Args, Returns, Raises, Examples
+- **Include type hints**: Use typing module for complex types
+- **Add inline comments**: Explain non-obvious logic and calculations
+- **Handle edge cases**: Consider and handle potential failure modes
+- **Write defensive code**: Validate inputs and handle errors gracefully
+
+#### When Modifying Existing Code
+- **Maintain consistency**: Follow existing patterns and style
+- **Preserve functionality**: Don't break existing interfaces
+- **Update documentation**: Modify docstrings and comments accordingly
+- **Consider backward compatibility**: Avoid breaking changes when possible
+
+#### When Creating New Features
+- **Follow module structure**: Place code in appropriate directories
+- **Create corresponding tests**: Write unit tests for new functionality
+- **Update configurations**: Add new parameters to config files
+- **Document usage**: Provide examples and usage instructions
+
+### 8. Common Patterns to Use
+
+#### Configuration Loading
+```python
+def load_config(config_path: str) -> dict:
+    """Load YAML configuration file with error handling."""
+    try:
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in {config_path}: {e}")
+```
+
+#### Experiment Setup
+```python
+def setup_experiment(args) -> tuple[str, logging.Logger]:
+    """Set up experiment directory and logging."""
+    exp_dir = f"{args.results_path}/{args.date_exp}/{args.exp_name}"
+    os.makedirs(exp_dir, exist_ok=True)
+    
+    logger = setup_logging(exp_dir)
+    save_config(args, exp_dir)
+    set_seed(args.seed)
+    
+    return exp_dir, logger
+```
+
+#### Model Training Loop
+```python
+def train_epoch(model, dataloader, optimizer, criterion, device):
+    """Train model for one epoch with proper error handling."""
+    model.train()
+    total_loss = 0.0
+    
+    for batch_idx, (data, target) in enumerate(dataloader):
+        try:
+            data, target = data.to(device), target.to(device)
+            optimizer.zero_grad()
+            output = model(data)
+            loss = criterion(output, target)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        except RuntimeError as e:
+            logger.error(f"Training error at batch {batch_idx}: {e}")
+            torch.cuda.empty_cache()
+            continue
+    
+    return total_loss / len(dataloader)
+```
+
+### 9. What to Avoid
+- **Global variables**: Use configuration objects instead
+- **Hardcoded values**: Make everything configurable
+- **Silent failures**: Always log errors and exceptions
+- **Memory leaks**: Properly manage GPU memory
+- **Inconsistent naming**: Follow established conventions
+- **Missing documentation**: Document all public interfaces
+- **Overly complex functions**: Break down large functions into smaller ones
+- **Tight coupling**: Keep modules independent and testable
+
+### 10. Performance Considerations
+- **Lazy loading**: Load data and models only when needed
+- **Batch processing**: Process data in batches for efficiency
+- **Caching**: Cache expensive computations when appropriate
+- **Profiling**: Use profilers to identify bottlenecks
+- **Memory monitoring**: Track GPU and CPU memory usage
+
+## Summary
+These rules ensure code quality, maintainability, and reproducibility for research projects. Always prioritize clarity, documentation, and error handling. When in doubt, follow existing patterns in the codebase and academic best practices.

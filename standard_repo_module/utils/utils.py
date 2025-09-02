@@ -8,6 +8,10 @@ import sys
 from termcolor import colored
 import pdb
 import matplotlib.pyplot as plt
+import hashlib
+import json
+from typing import Dict, Any, Tuple, Optional, Union
+from dataclasses import asdict
 COLOR_LIST = ["b", "r", "g", "y", "c", "m", "skyblue", "indigo", "goldenrod", "salmon", "pink",
                   "silver", "darkgreen", "lightcoral", "navy", "orchid", "steelblue", "saddlebrown", 
                   "orange", "olive", "tan", "firebrick", "maroon", "darkslategray", "crimson", "dodgerblue", "aquamarine",
@@ -89,11 +93,156 @@ def get_time(is_bracket=True, return_numerical_time=False, precision="second"):
         return string
 p = Printer(n_digits=6)
 
-# config utils
+# Config utils for tyro
+def get_config_hash(config: Any) -> str:
+    """Generate a hash string from configuration object.
+    
+    Args:
+        config: Configuration object (dataclass instance)
+        
+    Returns:
+        SHA-256 hash string of the configuration
+    """
+    # Convert dataclass to dictionary recursively
+    if hasattr(config, '__dict__'):
+        config_dict = {}
+        for key, value in config.__dict__.items():
+            if hasattr(value, '__dict__'):  # Handle nested dataclasses
+                config_dict[key] = asdict(value)
+            else:
+                config_dict[key] = value
+    else:
+        config_dict = asdict(config) if hasattr(config, '__dataclass_fields__') else vars(config)
+    
+    # Create deterministic JSON string and hash it
+    config_json = json.dumps(config_dict, sort_keys=True, default=str)
+    return hashlib.sha256(config_json.encode()).hexdigest()
+
+
+def setup_experiment_directory(config: Any, base_results_path: str) -> Tuple[str, str]:
+    """Set up experiment directory with proper naming convention.
+    
+    Args:
+        config: Training or evaluation configuration object
+        base_results_path: Base path for results directory
+        
+    Returns:
+        Tuple of (experiment_directory_path, config_hash_8chars)
+        
+    Raises:
+        OSError: If directory creation fails
+    """
+    config_hash = get_config_hash(config)[:8]
+    
+    # Get experiment name and date from config
+    if hasattr(config, 'training'):
+        exp_name = config.training.exp_name
+        date_exp = config.training.date_exp
+    elif hasattr(config, 'evaluation'):
+        exp_name = config.evaluation.exp_name
+        date_exp = config.evaluation.date_exp
+    else:
+        exp_name = getattr(config, 'exp_name', 'default_exp')
+        date_exp = getattr(config, 'date_exp', datetime.now().strftime('%Y-%m-%d'))
+    
+    # Create experiment directory structure
+    exp_dir = os.path.join(base_results_path, date_exp, f"{exp_name}_{config_hash}")
+    
+    # Create subdirectories
+    subdirs = ['checkpoints', 'logs', 'plots', 'inference_results']
+    for subdir in subdirs:
+        os.makedirs(os.path.join(exp_dir, subdir), exist_ok=True)
+    
+    return exp_dir, config_hash
+
+
+def save_config_from_tyro(config: Any, config_dir: str) -> str:
+    """Save tyro configuration to YAML file.
+    
+    Args:
+        config: Tyro configuration object (dataclass instance)
+        config_dir: Directory to save the config file
+        
+    Returns:
+        Path to the saved configuration file
+        
+    Raises:
+        OSError: If directory creation or file writing fails
+    """
+    os.makedirs(config_dir, exist_ok=True)
+    config_file_path = os.path.join(config_dir, 'config.yaml')
+    
+    # Convert dataclass to dictionary recursively
+    if hasattr(config, '__dict__'):
+        config_dict = {}
+        for key, value in config.__dict__.items():
+            if hasattr(value, '__dict__'):  # Handle nested dataclasses
+                config_dict[key] = asdict(value)
+            else:
+                config_dict[key] = value
+    else:
+        config_dict = asdict(config) if hasattr(config, '__dataclass_fields__') else vars(config)
+    
+    with open(config_file_path, 'w') as file:
+        yaml.dump(config_dict, file, default_flow_style=False, indent=2)
+    
+    return config_file_path
+
+
+def load_and_override_config(config_class: type, config_path: Optional[str] = None) -> Any:
+    """Load configuration from file and override defaults.
+    
+    Args:
+        config_class: Configuration class to instantiate
+        config_path: Path to YAML config file. If None, use default parameters
+        
+    Returns:
+        Configuration object with loaded/default parameters
+        
+    Raises:
+        FileNotFoundError: If config_path is provided but file doesn't exist
+        ValueError: If YAML file is invalid or incompatible with config class
+    """
+    if config_path is None:
+        # Use default parameters
+        return config_class()
+    
+    # Load configuration from file
+    config_dict = load_config_from_yaml(config_path)
+    
+    try:
+        # Create config object with loaded parameters
+        return config_class(**config_dict)
+    except TypeError as e:
+        raise ValueError(f"Configuration file incompatible with {config_class.__name__}: {e}")
+
+def load_config_from_yaml(config_path: str) -> dict:
+    """
+    Load configuration from YAML file.
+    
+    Args:
+        config_path: Path to the YAML config file
+        
+    Returns:
+        Dictionary containing configuration parameters
+    """
+    try:
+        with open(config_path, 'r') as file:
+            return yaml.safe_load(file)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in {config_path}: {e}")
+
+# Deprecated functions for backward compatibility
 def add_args_from_config(parser):
-    args=parser.parse_args()
+    """Deprecated: Use tyro configuration classes instead."""
+    import warnings
+    warnings.warn("add_args_from_config is deprecated. Use tyro configuration classes instead.", 
+                  DeprecationWarning, stacklevel=2)
+    args = parser.parse_args()
     with open(args.config, 'r') as file:
-        config=yaml.safe_load(file)
+        config = yaml.safe_load(file)
 
     existing_args = {action.dest for action in parser._actions}
     
@@ -104,7 +253,12 @@ def add_args_from_config(parser):
             parser.add_argument(f'--{key}', type=type(value), default=value)
     
     return parser
+
 def save_config_from_args(args):
+    """Deprecated: Use save_config_from_tyro instead."""
+    import warnings
+    warnings.warn("save_config_from_args is deprecated. Use save_config_from_tyro instead.", 
+                  DeprecationWarning, stacklevel=2)
     config_dict = {k: v for k, v in vars(args).items() if k != 'config'}
     
     config_dir = args.results_path
@@ -113,7 +267,7 @@ def save_config_from_args(args):
     with open(config_file_path, 'w') as file:
         yaml.dump(config_dict, file, default_flow_style=False)
 
-    return 
+    return config_file_path 
 
 
 # result analysis
@@ -158,38 +312,60 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = False
     return
 
-def draw_loss(training_loss_list, test_loss_list, save_path):
-    """
-    Plot the training and testing loss curves and save the plot to a file.
+def draw_loss(training_loss_list: list, test_loss_list: list, save_path: str) -> None:
+    """Plot training and testing loss curves and save to file.
+    
+    Creates a line plot showing the progression of training and testing losses
+    over epochs and saves it to the specified path.
     
     Args:
-    training_loss_list (list): List of training losses.
-    test_loss_list (list): List of testing losses.
-    save_path (str): Path where the plot will be saved.
-    
+        training_loss_list: List of training loss values, shape [num_epochs]
+        test_loss_list: List of testing loss values, shape [num_epochs]
+        save_path: Full path where the plot image will be saved (including filename)
+        
     Returns:
-    None
+        None
+        
+    Raises:
+        OSError: If the save directory doesn't exist or is not writable
+        ValueError: If loss lists have different lengths or are empty
     """
-    # Create a figure and axis object using plt.subplots
-    fig, ax = plt.subplots()
+    if len(training_loss_list) != len(test_loss_list):
+        raise ValueError(f"Loss lists must have same length: {len(training_loss_list)} vs {len(test_loss_list)}")
+    
+    if len(training_loss_list) == 0:
+        raise ValueError("Loss lists cannot be empty")
+    
+    # Ensure save directory exists
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    
+    # Create figure with proper size and DPI
+    fig, ax = plt.subplots(figsize=(10, 6), dpi=100)
 
-    # Plot training and testing loss
-    ax.plot(training_loss_list, label='Training Loss')
-    ax.plot(test_loss_list, label='Testing Loss')
+    # Plot training and testing loss with distinct colors
+    epochs = range(1, len(training_loss_list) + 1)
+    ax.plot(epochs, training_loss_list, 'b-', label='Training Loss', linewidth=2)
+    ax.plot(epochs, test_loss_list, 'r-', label='Testing Loss', linewidth=2)
 
-    # Set title and labels
-    ax.set_title('Training and Testing Loss During Training')
-    ax.set_xlabel('Epochs')
-    ax.set_ylabel('Loss')
-
-    # Display legend
-    ax.legend()
+    # Set title and labels with proper formatting
+    ax.set_title('Training and Testing Loss During Training', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Epochs', fontsize=12)
+    ax.set_ylabel('Loss', fontsize=12)
+    
+    # Add grid for better readability
+    ax.grid(True, alpha=0.3)
+    
+    # Display legend with proper positioning
+    ax.legend(loc='upper right', frameon=True, fancybox=True, shadow=True)
+    
+    # Adjust layout to prevent label cutoff
+    plt.tight_layout()
 
     # Save the plot to the specified file
-    plt.savefig(save_path)
-
-    # Show the plot
-    plt.show()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    
+    # Close the figure to free memory
+    plt.close(fig)
 
 
 def get_entropy(X, Y=None, K=3, NN=100, normalize=False, stop_grad_reference=False):

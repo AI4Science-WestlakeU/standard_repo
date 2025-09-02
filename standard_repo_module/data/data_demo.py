@@ -98,11 +98,14 @@ class Advection(Dataset):
         return data
 
 if __name__ == '__main__':
+    # Import EXP_PATH for proper path handling
+    from standard_repo_module.filepath import EXP_PATH
+    import os
+    
     test_dataset = Advection(
         dataset_name="Advection",
-        dataset_path='/user/project2024/standard_repo/dataset/advection',
-        mode = 'test',
-
+        dataset_path=os.path.join(EXP_PATH, 'standard_repo/dataset/advection'),
+        mode='test',
         input_steps=1,
         output_steps=80,
         time_interval=1,
